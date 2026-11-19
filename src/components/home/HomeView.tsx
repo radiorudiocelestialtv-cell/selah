@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 /* eslint-disable @next/next/no-img-element */
 import { useRef, useState } from "react";
 import Icon from "../Icon";
@@ -40,6 +40,7 @@ export default function HomeView() {
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [tab, setTab] = useState("home");
   const [msg, setMsg] = useState("");
+  const [sheet, setSheet] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -52,8 +53,8 @@ export default function HomeView() {
 
   function compose() {
     setTab("home");
-    window.scrollTo(0, 0);
-    taRef.current?.focus();
+    setSheet(true);
+    setTimeout(() => taRef.current?.focus(), 80);
   }
 
   function pickImage(file: File) {
@@ -92,6 +93,8 @@ export default function HomeView() {
     setPosts((ps) => [np, ...ps]);
     setText("");
     setImg(null);
+    setSheet(false);
+    window.scrollTo(0, 0);
   }
 
   const like = (id: number) =>
@@ -179,7 +182,7 @@ export default function HomeView() {
           <button onClick={() => setOpen(open === p.id ? null : p.id)}>
             <Icon name="chat" /> {p.cm.length}
           </button>
-          <button onClick={() => share(p.id)}>
+          <button className="shr" onClick={() => share(p.id)}>
             <Icon name="share" /> {p.s}
           </button>
         </div>
@@ -261,58 +264,7 @@ export default function HomeView() {
 
         <main>
           {tab === "home" ? (
-            <>
-              <div className="cd">
-                <textarea
-                  ref={taRef}
-                  rows={3}
-                  placeholder={T.placeholder}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                />
-                <div>
-                  {img && (
-                    <div className="mw">
-                      <img src={img} alt="" />
-                    </div>
-                  )}
-                </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) pickImage(f);
-                    e.target.value = "";
-                  }}
-                />
-                <div className="row">
-                  <button className="b2" onClick={() => fileRef.current?.click()}>
-                    <Icon name="img" /> Imagen
-                  </button>
-                  <button className="b2" onClick={() => flash(T.videoPronto)}>
-                    <Icon name="video" /> Video
-                  </button>
-                  <select
-                    aria-label="Destino"
-                    value={dest}
-                    onChange={(e) => setDest(Number(e.target.value))}
-                  >
-                    <option value={0}>{T.publico}</option>
-                  </select>
-                  <button
-                    className="b"
-                    style={{ marginLeft: "auto" }}
-                    onClick={publish}
-                  >
-                    Publicar
-                  </button>
-                </div>
-              </div>
-              {posts.map(card)}
-            </>
+            <>{posts.map(card)}</>
           ) : (
             <div className="cd">
               <h2>{BN.find((n) => n.k === tab)?.label}</h2>
@@ -320,7 +272,59 @@ export default function HomeView() {
             </div>
           )}
         </main>
+
+        <div className={"cd cs" + (sheet ? " on" : "")}>
+          <div className="sh">
+            <h3>Nueva publicación</h3>
+            <button className="b2" onClick={() => setSheet(false)}>
+              Cerrar
+            </button>
+          </div>
+          <textarea
+            ref={taRef}
+            rows={4}
+            placeholder={T.placeholder}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          {img && (
+            <div className="mw">
+              <img src={img} alt="" />
+            </div>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) pickImage(f);
+              e.target.value = "";
+            }}
+          />
+          <div className="row">
+            <button className="b2" onClick={() => fileRef.current?.click()}>
+              <Icon name="img" /> Imagen
+            </button>
+            <button className="b2" onClick={() => flash(T.videoPronto)}>
+              <Icon name="video" /> Video
+            </button>
+            <select
+              aria-label="Destino"
+              value={dest}
+              onChange={(e) => setDest(Number(e.target.value))}
+            >
+              <option value={0}>{T.publico}</option>
+            </select>
+            <button className="b" style={{ marginLeft: "auto" }} onClick={publish}>
+              Publicar
+            </button>
+          </div>
+        </div>
       </div>
+
+      {sheet && <div className="bk" onClick={() => setSheet(false)} />}
 
       <button className="fab" aria-label="Publicar" onClick={compose}>
         <Icon name="plus" />
