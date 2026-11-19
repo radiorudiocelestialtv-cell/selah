@@ -64,3 +64,21 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .bt{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--cd);border-top:1px solid var(--ln);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:6}
 .bt button{background:none;border:0;color:var(--mu);display:flex;flex-direction:column;align-items:center;gap:2px;font:11px system-ui,sans-serif;cursor:pointer;padding:4px 10px}.bt button.on{color:var(--br);font-weight:600}
 .fab{position:fixed;right:max(16px,calc(50% - 224px));bottom:calc(78px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;background:#F2B544;color:#1F3A5F;border:0;box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:7;cursor:pointer;display:flex;align-items:center;justify-content:center}.fab .i{width:26px;height:26px;stroke-width:2.4}
+
+/* Paso 2: estilo movil de referencia */
+.ap main{padding:0 0 150px}
+.ap main>.cd{margin:12px}
+.pp{border-radius:0;border-width:1px 0;margin-bottom:8px}
+.pp .ph{padding:12px 14px}
+.pp .ac{padding:6px 10px;margin:0;align-items:center}
+.pp .ac .ey{display:flex;gap:6px;align-items:center;color:var(--mu);padding:6px 10px}
+.pp .ac .shr{margin-left:auto}
+.cp{padding:10px 14px 2px}
+.pp .lk{margin:0 14px 10px}
+.pp>div[id^=c]{padding:0 14px 12px}
+.bk{position:fixed;inset:0;background:rgba(10,18,35,.55);z-index:24}
+.ap .cs{display:none}
+.ap .cs.on{display:block;position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:480px;margin:0;border-radius:18px 18px 0 0;border-width:1px 0 0;z-index:25;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px))}
+.cs .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.bt button{width:46px;height:42px;padding:0;justify-content:center;border-radius:12px}
+.bt button.on{background:var(--bg);box-shadow:0 0 0 1px var(--ln)}

@@ -20,6 +20,7 @@ export const ICONS = {
   bell: '<path d="M6 17V11a6 6 0 0112 0v6l2 2H4zM10 21h4"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   dots: '<path d="M12 5h.01M12 12h.01M12 19h.01"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 } as const;
 
 export type IconName = keyof typeof ICONS;
