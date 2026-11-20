@@ -123,3 +123,14 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .cmc{background:var(--cd);border-bottom:1px solid var(--ln);padding:12px 14px}
 .cmh{display:flex;align-items:center;gap:8px}
 .cmf input,.cmf textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}
+/* Comunidades detalle */
+.cmn{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;text-align:left}
+.cmw{display:flex;align-items:center;gap:8px;margin:6px 0}
+.cmw .av,.cma .av,.cph .av{width:32px;height:32px;font-size:14px}
+.cma{display:flex;gap:4px;margin:6px 0}
+.cmm{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.cmi{background:none;border:0;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font:inherit;font-size:12px;min-width:56px}
+.cmi .av{width:44px;height:44px;font-size:18px}
+.cmp{background:var(--cd);border-bottom:1px solid var(--ln);padding:12px 14px}
+.cph{display:flex;align-items:center;gap:8px}
+.cmt textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}

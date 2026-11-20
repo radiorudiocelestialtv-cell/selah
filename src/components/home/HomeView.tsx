@@ -56,6 +56,14 @@ type LiveRow = {
   author: { name: string } | null;
 };
 
+type CPost = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  body: string;
+  created_at: string;
+};
+
 type CommRow = {
   id: number;
   name: string;
@@ -130,6 +138,12 @@ export default function HomeView() {
   const [cmName, setCmName] = useState("");
   const [cmDesc, setCmDesc] = useState("");
   const [cmBusy, setCmBusy] = useState(false);
+  const [commProfs, setCommProfs] = useState<Record<string, Prof>>({});
+  const [commMembers, setCommMembers] = useState<Record<number, string[]>>({});
+  const [openComm, setOpenComm] = useState<number | null>(null);
+  const [cpPosts, setCpPosts] = useState<CPost[]>([]);
+  const [cpText, setCpText] = useState("");
+  const [cpBusy, setCpBusy] = useState(false);
   const [lives, setLives] = useState<LiveRow[]>([]);
   const [liveErr, setLiveErr] = useState("");
   const [liveForm, setLiveForm] = useState(false);
@@ -279,12 +293,38 @@ export default function HomeView() {
       );
     const cnt: Record<number, number> = {};
     const mine: number[] = [];
+    const byC: Record<number, string[]> = {};
     for (const m of (mm ?? []) as { community_id: number; user_id: string }[]) {
       cnt[m.community_id] = (cnt[m.community_id] ?? 0) + 1;
+      if (!byC[m.community_id]) byC[m.community_id] = [];
+      byC[m.community_id].push(m.user_id);
       if (m.user_id === uidRef.current) mine.push(m.community_id);
     }
     setCommCounts(cnt);
     setMyComms(mine);
+    setCommMembers(byC);
+    const pm = await profMap([
+      ...rows.map((r) => r.created_by),
+      ...Object.values(byC).reduce((a, b) => a.concat(b), [] as string[]),
+    ]);
+    setCommProfs((p) => ({ ...p, ...pm }));
+  }
+
+  async function loadCommPosts(id: number) {
+    const { data, error } = await sb()
+      .from("sl_community_posts")
+      .select("id,community_id,user_id,body,created_at")
+      .eq("community_id", id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      setCommErr("Error: " + error.message);
+      return;
+    }
+    const rows = (data ?? []) as CPost[];
+    const pm = await profMap(rows.map((r) => r.user_id));
+    setCommProfs((p) => ({ ...p, ...pm }));
+    setCpPosts(rows);
   }
 
   async function loadFollowing() {
@@ -335,6 +375,9 @@ export default function HomeView() {
     posts: loadPosts,
     stories: loadStories,
     comms: loadComms,
+    commPosts: () => {
+      if (openComm !== null) loadCommPosts(openComm);
+    },
     lives: loadLives,
     following: loadFollowing,
     comments: () => {
@@ -365,6 +408,7 @@ export default function HomeView() {
     on("sl_stories", () => fresh.current.stories());
     on("sl_communities", () => fresh.current.comms());
     on("sl_community_members", () => fresh.current.comms());
+    on("sl_community_posts", () => fresh.current.commPosts());
     on("sl_lives", () => fresh.current.lives());
     on("sl_follows", () => {
       fresh.current.following();
@@ -389,6 +433,12 @@ export default function HomeView() {
     fresh.current.posts();
     fresh.current.comms();
   }, [user]);
+
+  useEffect(() => {
+    if (openComm !== null && myComms.includes(openComm)) loadCommPosts(openComm);
+    else setCpPosts([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openComm, myComms.join(",")]);
 
   useEffect(() => {
     if (target) loadProfile(target);
@@ -591,6 +641,31 @@ export default function HomeView() {
     const { error } = await sb().from("sl_communities").delete().eq("id", id);
     if (error) return flash("Error: " + error.message);
     await loadComms();
+  }
+
+  function selectComm(id: number) {
+    setOpenComm(id);
+    window.scrollTo(0, 0);
+  }
+
+  async function createCommPost() {
+    if (!user || openComm === null) return;
+    const t = cpText.trim();
+    if (!t) return flash("Escribe algo para publicar.");
+    setCpBusy(true);
+    const { error } = await sb()
+      .from("sl_community_posts")
+      .insert({ community_id: openComm, user_id: user.id, body: t });
+    setCpBusy(false);
+    if (error) return flash("Error al publicar: " + error.message);
+    setCpText("");
+    await loadCommPosts(openComm);
+  }
+
+  async function deleteCommPost(id: number) {
+    const { error } = await sb().from("sl_community_posts").delete().eq("id", id);
+    if (error) return flash("Error: " + error.message);
+    if (openComm !== null) await loadCommPosts(openComm);
   }
 
   async function logout() {
@@ -907,7 +982,18 @@ export default function HomeView() {
     return (
       <article className="cmc" key={c.id}>
         <div className="cmh">
-          <b>{c.name}</b>
+          <button className="cmn" onClick={() => selectComm(c.id)}>
+            {c.name}
+          </button>
+        </div>
+        <div className="cmw">
+          <Avatar name={commProfs[c.created_by]?.name ?? "U"} src={commProfs[c.created_by]?.avatar_url} />
+          <small className="mu">Creada por {commProfs[c.created_by]?.name ?? "Usuario"}</small>
+        </div>
+        <div className="cma">
+          {(commMembers[c.id] ?? []).slice(0, 5).map((uid) => (
+            <Avatar key={uid} name={commProfs[uid]?.name ?? "U"} src={commProfs[uid]?.avatar_url} />
+          ))}
         </div>
         <small className="mu">
           {n} {n === 1 ? "miembro" : "miembros"}
@@ -926,6 +1012,99 @@ export default function HomeView() {
       </article>
     );
   };
+
+  const commCur = comms.find((c) => c.id === openComm) ?? null;
+  const commJoined = commCur ? myComms.includes(commCur.id) : false;
+
+  const commDetail = commCur ? (
+    <div>
+      <div className="cd">
+        <button className="b2" onClick={() => setOpenComm(null)}>
+          Volver
+        </button>
+        <h2>{commCur.name}</h2>
+        {commCur.description && <p className="mu">{commCur.description}</p>}
+        <div className="cmw">
+          <Avatar
+            name={commProfs[commCur.created_by]?.name ?? "U"}
+            src={commProfs[commCur.created_by]?.avatar_url}
+          />
+          <small className="mu">Creada por {commProfs[commCur.created_by]?.name ?? "Usuario"}</small>
+        </div>
+        <small className="mu">
+          {commCounts[commCur.id] ?? 0} {(commCounts[commCur.id] ?? 0) === 1 ? "miembro" : "miembros"}
+        </small>
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className={commJoined ? "b2" : "b"} onClick={() => toggleComm(commCur.id)}>
+            {commJoined ? "Salir" : "Unirme"}
+          </button>
+        </div>
+      </div>
+      <h3 className="pt">Miembros</h3>
+      <div className="cmm" style={{ padding: "0 14px" }}>
+        {(commMembers[commCur.id] ?? []).map((uid) => (
+          <button className="cmi" key={uid} onClick={() => openProfile(uid)}>
+            <Avatar name={commProfs[uid]?.name ?? "U"} src={commProfs[uid]?.avatar_url} />
+            <span>{commProfs[uid]?.name ?? "Usuario"}</span>
+          </button>
+        ))}
+      </div>
+      {commJoined ? (
+        <>
+          <div className="cd cmt">
+            <textarea
+              rows={3}
+              placeholder="Escribe algo para esta comunidad"
+              value={cpText}
+              onChange={(e) => setCpText(e.target.value)}
+            />
+            <div className="row">
+              <button className="b" disabled={cpBusy} onClick={createCommPost}>
+                {cpBusy ? "Publicando..." : "Publicar"}
+              </button>
+            </div>
+          </div>
+          <h3 className="pt">Publicaciones</h3>
+          {cpPosts.length ? (
+            cpPosts.map((p) => {
+              const au = commProfs[p.user_id];
+              return (
+                <article className="cmp" key={p.id}>
+                  <div className="cph">
+                    <Avatar name={au?.name ?? "U"} src={au?.avatar_url} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <b>{au?.name ?? "Usuario"}</b> <small className="mu">{ago(p.created_at)}</small>
+                    </div>
+                    {p.user_id === user?.id && (
+                      <button className="b2" onClick={() => deleteCommPost(p.id)}>
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                  <p className="cp">{p.body}</p>
+                </article>
+              );
+            })
+          ) : (
+            <p className="mu" style={{ padding: "0 14px" }}>
+              Aún no hay publicaciones. Sé el primero.
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="cd">
+          <p className="mu">Únete a la comunidad para ver y crear publicaciones.</p>
+        </div>
+      )}
+    </div>
+  ) : (
+    <div className="cd">
+      <button className="b2" onClick={() => setOpenComm(null)}>
+        Volver
+      </button>
+      <p className="mu">Cargando comunidad...</p>
+    </div>
+  );
 
   const commsView = (
     <div>
@@ -1041,7 +1220,7 @@ export default function HomeView() {
           ) : tab === "live" ? (
             liveView
           ) : tab === "comms" ? (
-            commsView
+            openComm !== null ? commDetail : commsView
           ) : tab === "home" ? (
             posts.length ? (
               posts.map(card)
