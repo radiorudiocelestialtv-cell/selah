@@ -379,6 +379,11 @@ export default function HomeView() {
     loadComments(id);
   }
 
+  async function logout() {
+    await sb().auth.signOut();
+    window.location.href = "/acceso";
+  }
+
   function share() {
     try {
       navigator.clipboard.writeText(window.location.href).catch(() => {});
@@ -558,6 +563,13 @@ export default function HomeView() {
             <span>Siguiendo</span>
           </button>
         </div>
+        {own && (
+          <div className="pfa">
+            <button className="b2" onClick={logout}>
+              Cerrar sesión
+            </button>
+          </div>
+        )}
         {!own && (
           <div className="pfa">
             <button className="b" onClick={() => toggleFollow(prof.id)}>
