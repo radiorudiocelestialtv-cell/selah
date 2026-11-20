@@ -210,6 +210,7 @@ export default function HomeView() {
   const [following, setFollowing] = useState<string[]>([]);
   const [tab, setTab] = useState("home");
   const [sq, setSq] = useState("");
+  const [nameEdit, setNameEdit] = useState<string | null>(null);
   const [sres, setSres] = useState<{ id: string; name: string; bio: string | null; avatar_url: string | null }[]>([]);
   useEffect(() => {
     if (tab !== "search") return;
@@ -781,6 +782,39 @@ export default function HomeView() {
     } catch {
       flash("No se pudo subir la imagen.");
     }
+  }
+
+  async function saveName(v: string) {
+    if (!user) return;
+    const nv = v.trim();
+    if (nv === (prof?.name ?? "")) {
+      setNameEdit(null);
+      return;
+    }
+    if (!window.confirm("Solo podr\u00e1s cambiar tu nombre una vez cada 30 d\u00edas. \u00bfContinuar?")) return;
+    const { error } = await sb().from("sl_profiles").update({ name: nv }).eq("id", user.id);
+    if (error) {
+      const m = error.message || "";
+      if (m.includes("NAME_COOLDOWN")) {
+        const raw = (m.split("NAME_COOLDOWN:")[1] ?? "").trim();
+        let d = new Date(raw.replace(" ", "T").replace(/([+-]\d\d)$/, "$1:00"));
+        if (isNaN(d.getTime())) d = new Date(raw.slice(0, 10) + "T12:00:00");
+        const f = isNaN(d.getTime())
+          ? ""
+          : " el " + d.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+        flash("Podr\u00e1s cambiarlo de nuevo" + f + ".");
+      } else if (m.includes("NAME_INVALID")) {
+        flash("El nombre debe tener entre 2 y 40 letras.");
+      } else {
+        flash("No se pudo cambiar el nombre.");
+      }
+      return;
+    }
+    setMe((m) => (m ? { ...m, name: nv } : m));
+    setProf((p) => (p && p.id === user.id ? { ...p, name: nv } : p));
+    setNameEdit(null);
+    loadPosts();
+    flash("Nombre actualizado.");
   }
 
   async function saveBio(v: string) {
@@ -1409,7 +1443,33 @@ export default function HomeView() {
             <span>{prof.name.charAt(0).toUpperCase()}</span>
           )}
         </button>
-        <h2>{prof.name}</h2>
+        {own && nameEdit !== null ? (
+          <div className="nme">
+            <input
+              className="nmi"
+              value={nameEdit}
+              maxLength={40}
+              autoFocus
+              aria-label="Nuevo nombre"
+              onChange={(e) => setNameEdit(e.target.value)}
+            />
+            <button type="button" className="b2" onClick={() => saveName(nameEdit)}>
+              Guardar
+            </button>
+            <button type="button" className="b2" onClick={() => setNameEdit(null)}>
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <>
+            <h2>{prof.name}</h2>
+            {own && (
+              <button type="button" className="nmb" onClick={() => setNameEdit(prof.name)}>
+                Cambiar nombre
+              </button>
+            )}
+          </>
+        )}
         {own ? (
           <textarea
             key={prof.id}
