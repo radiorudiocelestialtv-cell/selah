@@ -41,8 +41,13 @@ export default function HomeView() {
   const [tab, setTab] = useState("home");
   const [msg, setMsg] = useState("");
   const [sheet, setSheet] = useState(false);
+  const [myAv, setMyAv] = useState<string | null>(ME.av ?? null);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [bio, setBio] = useState("Haz una pausa. Conecta con Dios y con tu comunidad.");
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bnRef = useRef<HTMLInputElement>(null);
+  const avRef = useRef<HTMLInputElement>(null);
 
   const members = COMMS.reduce((a, c) => a + c.m, 0) + 1;
 
@@ -57,17 +62,17 @@ export default function HomeView() {
     setTimeout(() => taRef.current?.focus(), 80);
   }
 
-  function pickImage(file: File) {
+  function resize(file: File, max: number, done: (url: string) => void) {
     const r = new FileReader();
     r.onload = () => {
       const im = new Image();
       im.onload = () => {
-        const k = Math.min(1, 640 / im.width);
+        const k = Math.min(1, max / im.width);
         const c = document.createElement("canvas");
         c.width = im.width * k;
         c.height = im.height * k;
         c.getContext("2d")?.drawImage(im, 0, 0, c.width, c.height);
-        setImg(c.toDataURL("image/jpeg", 0.7));
+        done(c.toDataURL("image/jpeg", 0.75));
       };
       im.src = String(r.result);
     };
@@ -156,7 +161,7 @@ export default function HomeView() {
     return (
       <article className="pp" key={p.id}>
         <div className="ph">
-          <Avatar name={p.n} src={p.mine ? ME.av : null} />
+          <Avatar name={p.n} src={p.mine ? myAv : null} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <b>{p.n}</b>
             {p.vf && <Icon name="shield" className="vf" />}
@@ -213,6 +218,76 @@ export default function HomeView() {
     );
   }
 
+  const mine = posts.filter((p) => p.mine);
+  const profileView = (
+    <div>
+      <div
+        className="pbn"
+        style={banner ? { backgroundImage: `url(${banner})` } : undefined}
+      >
+        <button className="b2" onClick={() => bnRef.current?.click()}>
+          <Icon name="img" /> Cambiar portada
+        </button>
+      </div>
+      <div className="pin">
+        <button
+          className="pav"
+          aria-label="Cambiar foto de perfil"
+          onClick={() => avRef.current?.click()}
+        >
+          {myAv ? <img src={myAv} alt="" /> : <span>{ME.n.charAt(0).toUpperCase()}</span>}
+        </button>
+        <h2>{ME.n}</h2>
+        <textarea
+          rows={2}
+          aria-label="Biografia"
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+        />
+        <div className="pst">
+          <div>
+            <b>{mine.length}</b>
+            <span>Publicaciones</span>
+          </div>
+          <div>
+            <b>{mine.reduce((a, p) => a + p.l, 0)}</b>
+            <span>Me gusta</span>
+          </div>
+        </div>
+        <input
+          ref={bnRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const x = e.target.files?.[0];
+            if (x) resize(x, 900, setBanner);
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={avRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const x = e.target.files?.[0];
+            if (x) resize(x, 400, setMyAv);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      <h3 className="pt">Mis publicaciones</h3>
+      {mine.length ? (
+        mine.map(card)
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          Aun no has publicado. Toca el boton + para empezar.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="ap">
@@ -238,9 +313,9 @@ export default function HomeView() {
             <button onClick={compose}>
               <div className="rg me">
                 <div>
-                  {ME.av ? (
+                  {myAv ? (
                     <img
-                      src={ME.av}
+                      src={myAv}
                       alt=""
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
@@ -263,7 +338,9 @@ export default function HomeView() {
         )}
 
         <main>
-          {tab === "home" ? (
+          {tab === "profile" ? (
+            profileView
+          ) : tab === "home" ? (
             <>{posts.map(card)}</>
           ) : (
             <div className="cd">
@@ -299,7 +376,7 @@ export default function HomeView() {
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) pickImage(f);
+              if (f) resize(f, 640, setImg);
               e.target.value = "";
             }}
           />
