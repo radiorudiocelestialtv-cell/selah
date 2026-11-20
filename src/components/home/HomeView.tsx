@@ -1464,9 +1464,14 @@ export default function HomeView() {
           <>
             <h2>{prof.name}</h2>
             {own && (
-              <button type="button" className="nmb" onClick={() => setNameEdit(prof.name)}>
-                Cambiar nombre
-              </button>
+              <>
+                <button type="button" className="nmb" onClick={() => setNameEdit(prof.name)}>
+                  Cambiar nombre
+                </button>
+                <span className="nmh">
+                  Despu&eacute;s de editar el nombre no lo podr&aacute;s cambiar durante 30 d&iacute;as.
+                </span>
+              </>
             )}
           </>
         )}
