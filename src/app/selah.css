@@ -150,3 +150,20 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .mkph1{flex:1;display:flex;flex-direction:column;gap:6px}
 .mkph1 img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px}
 .mk a.b{text-decoration:none;display:inline-block;text-align:center}
+/* Mensajes */
+.bt button{position:relative}
+.nb{position:absolute;top:0;right:0;min-width:16px;height:16px;border-radius:8px;background:#b42318;color:#fff;font-size:10px;line-height:16px;text-align:center;padding:0 4px;font-style:normal;font-weight:700}
+.nb2{background:#b42318;color:#fff;border-radius:10px;min-width:20px;height:20px;line-height:20px;text-align:center;font-size:12px;font-style:normal;font-weight:700;padding:0 6px}
+.chl{display:flex;align-items:center;gap:10px;width:100%;background:var(--cd);border:0;border-bottom:1px solid var(--ln);padding:10px 14px;color:var(--ink);cursor:pointer;text-align:left;font:inherit}
+.chl .av,.chh .av{width:40px;height:40px;font-size:16px}
+.chx{flex:1;min-width:0;display:flex;flex-direction:column}
+.chx small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chh{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--cd);border-bottom:1px solid var(--ln)}
+.chn{background:none;border:0;display:flex;align-items:center;gap:8px;color:var(--ink);cursor:pointer;font:inherit;font-weight:700;padding:0}
+.cht{display:flex;flex-direction:column;gap:6px;padding:12px 14px 80px}
+.mg{max-width:80%;align-self:flex-start;background:var(--cd);border:1px solid var(--ln);border-radius:14px;padding:8px 12px;display:flex;flex-direction:column;gap:2px;white-space:pre-wrap;word-break:break-word}
+.mg.me{align-self:flex-end;background:var(--br);color:#fff;border-color:var(--br)}
+.mg small{font-size:11px;opacity:.7}
+.chc{position:sticky;bottom:calc(58px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;padding:8px 14px;background:var(--cd);border-top:1px solid var(--ln)}
+.chc input{flex:1;min-width:0}
+.chp input{display:block;width:100%;margin-top:8px;box-sizing:border-box}

@@ -13,6 +13,7 @@ const BN: { k: string; icon: IconName; label: string }[] = [
   { k: "comms", icon: "users", label: "Comunidades" },
   { k: "live", icon: "live", label: "En vivo" },
   { k: "market", icon: "store", label: "Mercado" },
+  { k: "chat", icon: "chat", label: "Mensajes" },
   { k: "profile", icon: "user", label: "Perfil" },
 ];
 
@@ -24,6 +25,14 @@ type Prof = {
   banner_url: string | null;
 };
 type Mini = { id: string; name: string; avatar_url: string | null };
+type Msg = {
+  id: number;
+  sender_id: string;
+  receiver_id: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+};
 type PostRow = {
   id: number;
   user_id: string;
@@ -189,6 +198,19 @@ export default function HomeView() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [dbg, setDbg] = useState("");
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [chatWith, setChatWith] = useState<string | null>(null);
+  const [chatText, setChatText] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatErr, setChatErr] = useState("");
+  const [chatProfs, setChatProfs] = useState<Record<string, Prof>>({});
+  const [chatPick, setChatPick] = useState(false);
+  const [chatPeople, setChatPeople] = useState<Mini[]>([]);
+  const [chatQ, setChatQ] = useState("");
+  const chatWithRef = useRef<string | null>(null);
+  const lastInRef = useRef<number | null>(null);
+  const audioRef = useRef<AudioContext | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [mkErr, setMkErr] = useState("");
   const [myCountry, setMyCountry] = useState<string | null>(null);
@@ -454,6 +476,7 @@ export default function HomeView() {
       if (openComm !== null) loadCommPosts(openComm);
     },
     lives: loadLives,
+    chat: loadChats,
     following: loadFollowing,
     comments: () => {
       if (open !== null) loadComments(open);
@@ -486,6 +509,7 @@ export default function HomeView() {
     on("sl_community_members", () => fresh.current.comms());
     on("sl_community_posts", () => fresh.current.commPosts());
     on("sl_lives", () => fresh.current.lives());
+    on("sl_messages", () => fresh.current.chat());
     on("sl_follows", () => {
       fresh.current.following();
       fresh.current.profile();
@@ -848,6 +872,161 @@ export default function HomeView() {
     if (error) return flash("Error: " + error.message);
     await loadMarket();
   }
+
+  chatWithRef.current = tab === "chat" ? chatWith : null;
+
+  function playPing() {
+    const ctx = audioRef.current;
+    if (!ctx || ctx.state !== "running") return;
+    const now = ctx.currentTime;
+    [880, 1175].forEach((f, i) => {
+      const t0 = now + i * 0.14;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(t0);
+      o.stop(t0 + 0.3);
+    });
+  }
+
+  async function loadChats() {
+    const uid = uidRef.current;
+    if (!uid) {
+      setMsgs([]);
+      return;
+    }
+    const { data, error } = await sb()
+      .from("sl_messages")
+      .select("id,sender_id,receiver_id,body,is_read,created_at")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      setChatErr("Error: " + error.message);
+      return;
+    }
+    setChatErr("");
+    const rows = (data ?? []) as Msg[];
+    setMsgs(rows);
+    const others = rows.map((r) => (r.sender_id === uid ? r.receiver_id : r.sender_id));
+    const pm = await profMap(others);
+    setChatProfs((p) => ({ ...p, ...pm }));
+
+    let maxIn = 0;
+    for (const r of rows) if (r.receiver_id === uid && r.id > maxIn) maxIn = r.id;
+    const prev = lastInRef.current;
+    lastInRef.current = Math.max(prev ?? 0, maxIn);
+    if (prev !== null && maxIn > prev) {
+      const newest = rows.find((r) => r.id === maxIn);
+      const viewing =
+        !!newest &&
+        chatWithRef.current === newest.sender_id &&
+        document.visibilityState === "visible";
+      if (!viewing) playPing();
+    }
+
+    const cw = chatWithRef.current;
+    if (cw && document.visibilityState === "visible") {
+      const unread = rows
+        .filter((r) => r.sender_id === cw && r.receiver_id === uid && !r.is_read)
+        .map((r) => r.id);
+      if (unread.length) {
+        await sb().from("sl_messages").update({ is_read: true }).in("id", unread);
+      }
+    }
+  }
+
+  async function loadPeople() {
+    const uid = uidRef.current;
+    if (!uid) return;
+    const { data } = await sb()
+      .from("sl_profiles")
+      .select("id,name,avatar_url")
+      .neq("id", uid)
+      .order("name")
+      .limit(200);
+    setChatPeople((data ?? []) as Mini[]);
+  }
+
+  function openChat(id: string, p?: Mini) {
+    if (p) {
+      setChatProfs((prev) => ({
+        ...prev,
+        [id]: prev[id] ?? { id, name: p.name, bio: null, avatar_url: p.avatar_url, banner_url: null },
+      }));
+    }
+    setChatWith(id);
+    setChatPick(false);
+    setChatQ("");
+    window.scrollTo(0, 0);
+  }
+
+  async function sendMsg() {
+    if (!user || !chatWith || chatBusy) return;
+    const t = chatText.trim();
+    if (!t) return;
+    setChatBusy(true);
+    const { error } = await sb()
+      .from("sl_messages")
+      .insert({ sender_id: user.id, receiver_id: chatWith, body: t });
+    setChatBusy(false);
+    if (error) return flash("Error al enviar: " + error.message);
+    setChatText("");
+    await loadChats();
+  }
+
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        if (!audioRef.current) {
+          const AC =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          audioRef.current = new AC();
+        }
+        if (audioRef.current.state === "suspended") audioRef.current.resume();
+      } catch {
+        /* sin audio disponible */
+      }
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+    lastInRef.current = null;
+    let iv: ReturnType<typeof setInterval> | undefined;
+    if (user) {
+      fresh.current.chat();
+      iv = setInterval(() => {
+        if (document.visibilityState === "visible") fresh.current.chat();
+      }, 20000);
+    } else {
+      setMsgs([]);
+    }
+    return () => {
+      if (iv) clearInterval(iv);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (tab === "chat" && user) fresh.current.chat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, chatWith]);
+
+  useEffect(() => {
+    if (chatWith) chatEndRef.current?.scrollIntoView({ block: "end" });
+  }, [msgs, chatWith]);
 
   async function logout() {
     await sb().auth.signOut();
@@ -1523,6 +1702,131 @@ export default function HomeView() {
     </div>
   );
 
+  const chatMap = new Map<string, { other: string; last: Msg; unread: number }>();
+  if (user) {
+    for (const r of msgs) {
+      const other = r.sender_id === user.id ? r.receiver_id : r.sender_id;
+      const inUnread = r.receiver_id === user.id && !r.is_read ? 1 : 0;
+      const e = chatMap.get(other);
+      if (!e) chatMap.set(other, { other, last: r, unread: inUnread });
+      else e.unread += inUnread;
+    }
+  }
+  const chatList = Array.from(chatMap.values());
+  const unreadTotal = chatList.reduce((a, c) => a + c.unread, 0);
+  const thread = chatWith
+    ? msgs.filter((r) => r.sender_id === chatWith || r.receiver_id === chatWith).slice().reverse()
+    : [];
+
+  const chatView = !user ? (
+    <div className="cd">
+      <h2>Mensajes</h2>
+      <p className="mu">Inicia sesión para chatear con otras personas.</p>
+    </div>
+  ) : chatWith ? (
+    <div>
+      <div className="chh">
+        <button className="b2" onClick={() => setChatWith(null)}>
+          Volver
+        </button>
+        <button className="chn" onClick={() => openProfile(chatWith)}>
+          <Avatar name={chatProfs[chatWith]?.name ?? "U"} src={chatProfs[chatWith]?.avatar_url} />
+          <span>{chatProfs[chatWith]?.name ?? "Usuario"}</span>
+        </button>
+      </div>
+      <div className="cht">
+        {thread.length ? (
+          thread.map((m) => (
+            <div key={m.id} className={m.sender_id === user.id ? "mg me" : "mg"}>
+              <span>{m.body}</span>
+              <small>{ago(m.created_at)}</small>
+            </div>
+          ))
+        ) : (
+          <p className="mu">Escribe el primer mensaje.</p>
+        )}
+        <div ref={chatEndRef} />
+      </div>
+      <div className="chc">
+        <input
+          placeholder="Escribe un mensaje"
+          value={chatText}
+          onChange={(e) => setChatText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendMsg();
+            }
+          }}
+        />
+        <button className="b" disabled={chatBusy} onClick={sendMsg}>
+          Enviar
+        </button>
+      </div>
+    </div>
+  ) : chatPick ? (
+    <div>
+      <div className="cd chp">
+        <button className="b2" onClick={() => setChatPick(false)}>
+          Volver
+        </button>
+        <input placeholder="Buscar por nombre" value={chatQ} onChange={(e) => setChatQ(e.target.value)} />
+      </div>
+      {chatPeople
+        .filter((p) => p.name.toLowerCase().includes(chatQ.trim().toLowerCase()))
+        .map((p) => (
+          <button className="chl" key={p.id} onClick={() => openChat(p.id, p)}>
+            <Avatar name={p.name} src={p.avatar_url} />
+            <div className="chx">
+              <b>{p.name}</b>
+            </div>
+          </button>
+        ))}
+    </div>
+  ) : (
+    <div>
+      <div className="cd">
+        <h2>Mensajes</h2>
+        <p className="mu">Chatea en privado con otras personas.</p>
+        <button
+          className="b"
+          onClick={() => {
+            setChatPick(true);
+            loadPeople();
+          }}
+        >
+          Nuevo mensaje
+        </button>
+      </div>
+      {chatErr && (
+        <div className="cd">
+          <p className="mu">
+            <small>{chatErr}</small>
+          </p>
+        </div>
+      )}
+      {chatList.length ? (
+        chatList.map((c) => (
+          <button className="chl" key={c.other} onClick={() => openChat(c.other)}>
+            <Avatar name={chatProfs[c.other]?.name ?? "U"} src={chatProfs[c.other]?.avatar_url} />
+            <div className="chx">
+              <b>{chatProfs[c.other]?.name ?? "Usuario"}</b>
+              <small className="mu">
+                {c.last.sender_id === user.id ? "Tú: " : ""}
+                {c.last.body}
+              </small>
+            </div>
+            {c.unread > 0 && <i className="nb2">{c.unread}</i>}
+          </button>
+        ))
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          Aún no tienes conversaciones.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="ap">
@@ -1584,6 +1888,8 @@ export default function HomeView() {
             openComm !== null ? commDetail : commsView
           ) : tab === "market" ? (
             marketView
+          ) : tab === "chat" ? (
+            chatView
           ) : tab === "home" ? (
             posts.length ? (
               posts.map(card)
@@ -1745,7 +2051,7 @@ export default function HomeView() {
           );
         })()}
 
-      <button className="fab" aria-label="Publicar" onClick={compose}>
+      <button className="fab" style={tab === "chat" ? { display: "none" } : undefined} aria-label="Publicar" onClick={compose}>
         <Icon name="plus" />
       </button>
       <nav className="bt">
@@ -1761,6 +2067,7 @@ export default function HomeView() {
             }}
           >
             <Icon name={n.icon} />
+            {n.k === "chat" && unreadTotal > 0 && <i className="nb">{unreadTotal > 9 ? "9+" : unreadTotal}</i>}
           </button>
         ))}
       </nav>
