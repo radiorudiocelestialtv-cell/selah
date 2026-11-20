@@ -170,3 +170,9 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 /* Editar publicacion */
 .ed{padding:8px 14px 0}
 .ed textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}
+/* Encabezado compacto */
+.tb{border-bottom:0;padding:4px 12px}
+.tb button{padding:4px}
+.tb .lg{font-size:19px;gap:6px}
+.dot{top:3px;right:3px}
+.st{border-bottom:0;padding:4px 12px 10px;gap:10px}
