@@ -39,6 +39,7 @@ type PostRow = {
   body: string;
   image_url: string | null;
   created_at: string;
+  edited_at: string | null;
   author: Prof | null;
 };
 type Cmt = {
@@ -183,6 +184,9 @@ export default function HomeView() {
   const [cmts, setCmts] = useState<Record<number, Cmt[]>>({});
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [open, setOpen] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
   const [stories, setStories] = useState<StoryRow[]>([]);
   const [viewer, setViewer] = useState<{ list: StoryRow[]; i: number } | null>(null);
   const [following, setFollowing] = useState<string[]>([]);
@@ -287,7 +291,7 @@ export default function HomeView() {
   async function loadPosts() {
     const { data, error } = await sb()
       .from("sl_posts")
-      .select("id,user_id,body,image_url,created_at")
+      .select("id,user_id,body,image_url,created_at,edited_at")
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) {
@@ -554,6 +558,32 @@ export default function HomeView() {
       .upload(path, b, { contentType: "image/jpeg" });
     if (error) throw error;
     return sb().storage.from("selah-media").getPublicUrl(path).data.publicUrl;
+  }
+
+  function startEdit(p: PostRow) {
+    setEditId(p.id);
+    setEditText(p.body);
+  }
+
+  async function savePostEdit(id: number) {
+    const t = editText.trim();
+    const cur = posts.find((x) => x.id === id);
+    if (!t && !cur?.image_url) return flash("La publicación no puede quedar vacía.");
+    setEditBusy(true);
+    const { error } = await sb().from("sl_posts").update({ body: t }).eq("id", id);
+    setEditBusy(false);
+    if (error) return flash("Error al editar: " + error.message);
+    setEditId(null);
+    setEditText("");
+    await loadPosts();
+  }
+
+  async function deletePost(id: number) {
+    if (!window.confirm("¿Eliminar esta publicación?")) return;
+    const { error } = await sb().from("sl_posts").delete().eq("id", id);
+    if (error) return flash("Error al eliminar: " + error.message);
+    if (editId === id) setEditId(null);
+    await loadPosts();
   }
 
   function compose() {
@@ -1087,7 +1117,7 @@ export default function HomeView() {
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <b>{name}</b>
-            <small>{ago(p.created_at)}</small>
+            <small>{ago(p.created_at)}{p.edited_at ? " - editada" : ""}</small>
           </div>
           {!isMine && (
             <button className="b2 sg" onClick={() => toggleFollow(p.user_id)}>
@@ -1118,10 +1148,37 @@ export default function HomeView() {
           <button onClick={() => toggleComments(p.id)}>
             <Icon name="chat" /> {cmts[p.id]?.length ?? ""}
           </button>
+          {isMine && (
+            <>
+              <button onClick={() => startEdit(p)} aria-label="Editar publicación">
+                Editar
+              </button>
+              <button onClick={() => deletePost(p.id)} aria-label="Eliminar publicación">
+                Eliminar
+              </button>
+            </>
+          )}
           <button className="shr" onClick={share} aria-label="Compartir">
             <Icon name="share" />
           </button>
         </div>
+        {editId === p.id && (
+          <div className="ed">
+            <textarea
+              rows={3}
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+            />
+            <div className="row">
+              <button className="b" disabled={editBusy} onClick={() => savePostEdit(p.id)}>
+                {editBusy ? "Guardando..." : "Guardar"}
+              </button>
+              <button className="b2" onClick={() => setEditId(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
         <div id={`c${p.id}`}>
           {open === p.id && (
             <>
