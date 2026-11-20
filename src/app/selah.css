@@ -134,3 +134,19 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .cmp{background:var(--cd);border-bottom:1px solid var(--ln);padding:12px 14px}
 .cph{display:flex;align-items:center;gap:8px}
 .cmt textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}
+/* Mercado */
+.mk{background:var(--cd);border-bottom:1px solid var(--ln)}
+.mkp{display:flex;gap:2px}
+.mkp img{flex:1;min-width:0;width:50%;aspect-ratio:1/1;object-fit:cover}
+.mkp img:only-child{width:100%;aspect-ratio:4/3}
+.mkb{padding:12px 14px}
+.mkt{display:flex;align-items:center;gap:8px}
+.mks{background:#555;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px}
+.mkpr{font-weight:700;font-size:18px;margin:4px 0}
+.mkv{background:none;border:0;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:8px;font:inherit;padding:0;margin-top:6px}
+.mkv .av{width:28px;height:28px;font-size:13px}
+.mkf input,.mkf textarea,.mkc select{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}
+.mkph{display:flex;gap:8px;margin-bottom:8px}
+.mkph1{flex:1;display:flex;flex-direction:column;gap:6px}
+.mkph1 img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px}
+.mk a.b{text-decoration:none;display:inline-block;text-align:center}

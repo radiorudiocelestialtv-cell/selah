@@ -72,6 +72,65 @@ type CommRow = {
   created_at: string;
 };
 
+type Listing = {
+  id: number;
+  user_id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  country: string;
+  image1_url: string;
+  image2_url: string | null;
+  whatsapp: string | null;
+  sold: boolean;
+  created_at: string;
+};
+
+const COUNTRIES: { code: string; name: string; cur: string }[] = [
+  { code: "AR", name: "Argentina", cur: "ARS" },
+  { code: "BO", name: "Bolivia", cur: "BOB" },
+  { code: "BR", name: "Brasil", cur: "BRL" },
+  { code: "CA", name: "Canadá", cur: "CAD" },
+  { code: "CL", name: "Chile", cur: "CLP" },
+  { code: "CO", name: "Colombia", cur: "COP" },
+  { code: "CR", name: "Costa Rica", cur: "CRC" },
+  { code: "CU", name: "Cuba", cur: "CUP" },
+  { code: "EC", name: "Ecuador", cur: "USD" },
+  { code: "SV", name: "El Salvador", cur: "USD" },
+  { code: "ES", name: "España", cur: "EUR" },
+  { code: "US", name: "Estados Unidos", cur: "USD" },
+  { code: "GT", name: "Guatemala", cur: "GTQ" },
+  { code: "HN", name: "Honduras", cur: "HNL" },
+  { code: "MX", name: "México", cur: "MXN" },
+  { code: "NI", name: "Nicaragua", cur: "NIO" },
+  { code: "PA", name: "Panamá", cur: "USD" },
+  { code: "PY", name: "Paraguay", cur: "PYG" },
+  { code: "PE", name: "Perú", cur: "PEN" },
+  { code: "PR", name: "Puerto Rico", cur: "USD" },
+  { code: "GB", name: "Reino Unido", cur: "GBP" },
+  { code: "DO", name: "República Dominicana", cur: "DOP" },
+  { code: "UY", name: "Uruguay", cur: "UYU" },
+  { code: "VE", name: "Venezuela", cur: "VES" },
+];
+
+function fmtPrice(n: number, country: string) {
+  const cur = COUNTRIES.find((c) => c.code === country)?.cur ?? "USD";
+  try {
+    return (
+      new Intl.NumberFormat("es", {
+        style: "currency",
+        currency: cur,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(n) +
+      " " +
+      cur
+    );
+  } catch {
+    return cur + " " + n;
+  }
+}
+
 function ago(s: string) {
   const d = (Date.now() - new Date(s).getTime()) / 1000;
   if (d < 60) return "ahora";
@@ -130,6 +189,21 @@ export default function HomeView() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [dbg, setDbg] = useState("");
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [mkErr, setMkErr] = useState("");
+  const [myCountry, setMyCountry] = useState<string | null>(null);
+  const [pickCountry, setPickCountry] = useState("");
+  const [mkForm, setMkForm] = useState(false);
+  const [mkTitle, setMkTitle] = useState("");
+  const [mkDesc, setMkDesc] = useState("");
+  const [mkPrice, setMkPrice] = useState("");
+  const [mkWa, setMkWa] = useState("");
+  const [mkFiles, setMkFiles] = useState<(File | null)[]>([null, null]);
+  const [mkPrev, setMkPrev] = useState<(string | null)[]>([null, null]);
+  const [mkBusy, setMkBusy] = useState(false);
+  const [mkProfs, setMkProfs] = useState<Record<string, Prof>>({});
+  const mk1Ref = useRef<HTMLInputElement>(null);
+  const mk2Ref = useRef<HTMLInputElement>(null);
   const [comms, setComms] = useState<CommRow[]>([]);
   const [commCounts, setCommCounts] = useState<Record<number, number>>({});
   const [myComms, setMyComms] = useState<number[]>([]);
@@ -374,6 +448,7 @@ export default function HomeView() {
     total: loadTotal,
     posts: loadPosts,
     stories: loadStories,
+    market: loadMarket,
     comms: loadComms,
     commPosts: () => {
       if (openComm !== null) loadCommPosts(openComm);
@@ -406,6 +481,7 @@ export default function HomeView() {
     on("sl_posts", () => fresh.current.posts());
     on("sl_likes", () => fresh.current.posts());
     on("sl_stories", () => fresh.current.stories());
+    on("sl_listings", () => fresh.current.market());
     on("sl_communities", () => fresh.current.comms());
     on("sl_community_members", () => fresh.current.comms());
     on("sl_community_posts", () => fresh.current.commPosts());
@@ -666,6 +742,111 @@ export default function HomeView() {
     const { error } = await sb().from("sl_community_posts").delete().eq("id", id);
     if (error) return flash("Error: " + error.message);
     if (openComm !== null) await loadCommPosts(openComm);
+  }
+
+  async function loadMarket() {
+    const uid = uidRef.current;
+    if (uid) {
+      const { data: pr } = await sb().from("sl_profiles").select("country").eq("id", uid).maybeSingle();
+      setMyCountry((pr as { country: string | null } | null)?.country ?? null);
+    }
+    const { data, error } = await sb()
+      .from("sl_listings")
+      .select("id,user_id,title,description,price,country,image1_url,image2_url,whatsapp,sold,created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      setMkErr("Error: " + error.message);
+      return;
+    }
+    setMkErr("");
+    const rows = (data ?? []) as Listing[];
+    setListings(rows);
+    const pm = await profMap(rows.map((r) => r.user_id));
+    setMkProfs(pm);
+  }
+
+  useEffect(() => {
+    if (tab === "market") fresh.current.market();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user?.id]);
+
+  async function saveCountry() {
+    if (!user) return flash("Inicia sesión primero.");
+    if (!pickCountry) return flash("Elige tu país.");
+    if (!window.confirm("Tu país define la moneda de tus precios y no se puede cambiar después. ¿Confirmas?")) return;
+    const { error } = await sb().from("sl_profiles").update({ country: pickCountry }).eq("id", user.id);
+    if (error) return flash("Error: " + error.message);
+    await loadMarket();
+  }
+
+  function pickMk(i: number, f: File | undefined) {
+    if (!f) return;
+    setMkFiles((a) => a.map((x, k) => (k === i ? f : x)));
+    setMkPrev((a) => a.map((x, k) => (k === i ? URL.createObjectURL(f) : x)));
+  }
+
+  function dropMk(i: number) {
+    setMkFiles((a) => a.map((x, k) => (k === i ? null : x)));
+    setMkPrev((a) => a.map((x, k) => (k === i ? null : x)));
+  }
+
+  async function createListing() {
+    if (!user) return flash("Inicia sesión para vender.");
+    if (!myCountry) return flash("Elige tu país primero.");
+    const t = mkTitle.trim();
+    const price = Number(mkPrice);
+    const wa = mkWa.replace(/[^0-9]/g, "");
+    if (!t) return flash("Escribe qué vendes.");
+    if (!(price > 0)) return flash("Escribe un precio válido.");
+    if (wa.length < 8 || wa.length > 15) return flash("Escribe tu WhatsApp con código de país, solo números.");
+    const files = mkFiles.filter((f): f is File => !!f);
+    if (!files.length) return flash("Agrega al menos una foto.");
+    setMkBusy(true);
+    try {
+      const urls: string[] = [];
+      for (const f of files) urls.push(await uploadImg(f, 900, "market"));
+      const { error } = await sb().from("sl_listings").insert({
+        user_id: user.id,
+        title: t,
+        description: mkDesc.trim() || null,
+        price,
+        country: myCountry,
+        image1_url: urls[0],
+        image2_url: urls[1] ?? null,
+        whatsapp: wa,
+      });
+      if (error) {
+        flash("Error al publicar: " + error.message);
+        return;
+      }
+      setMkTitle("");
+      setMkDesc("");
+      setMkPrice("");
+      setMkWa("");
+      setMkFiles([null, null]);
+      setMkPrev([null, null]);
+      setMkForm(false);
+      await loadMarket();
+      flash("Artículo publicado.");
+    } catch {
+      flash("No se pudo publicar. Intenta de nuevo.");
+    } finally {
+      setMkBusy(false);
+    }
+  }
+
+  async function toggleSold(l: Listing) {
+    const { error } = await sb().from("sl_listings").update({ sold: !l.sold }).eq("id", l.id);
+    if (error) return flash("Error: " + error.message);
+    await loadMarket();
+  }
+
+  async function deleteListing(id: number) {
+    if (!window.confirm("¿Eliminar este artículo?")) return;
+    const { error } = await sb().from("sl_listings").delete().eq("id", id);
+    if (error) return flash("Error: " + error.message);
+    await loadMarket();
   }
 
   async function logout() {
@@ -1162,6 +1343,186 @@ export default function HomeView() {
     </div>
   );
 
+  const mkRefs = [mk1Ref, mk2Ref];
+  const mkAvail = listings.filter((l) => !l.sold);
+  const mkSold = listings.filter((l) => l.sold);
+
+  const listCard = (l: Listing) => {
+    const au = mkProfs[l.user_id];
+    const mineL = l.user_id === user?.id;
+    const cn = COUNTRIES.find((c) => c.code === l.country)?.name ?? l.country;
+    return (
+      <article className="mk" key={l.id}>
+        <div className="mkp">
+          <img src={l.image1_url} alt="" />
+          {l.image2_url && <img src={l.image2_url} alt="" />}
+        </div>
+        <div className="mkb">
+          <div className="mkt">
+            <b>{l.title}</b>
+            {l.sold && <span className="mks">Vendido</span>}
+          </div>
+          <div className="mkpr">{fmtPrice(l.price, l.country)}</div>
+          <small className="mu">{cn}</small>
+          {l.description && <p className="cp">{l.description}</p>}
+          <button className="mkv" onClick={() => openProfile(l.user_id)}>
+            <Avatar name={au?.name ?? "U"} src={au?.avatar_url} />
+            <span>{au?.name ?? "Vendedor"}</span>
+          </button>
+          <div className="row" style={{ marginTop: 8 }}>
+            {!mineL && !l.sold && l.whatsapp && (
+              <a className="b" href={`https://wa.me/${l.whatsapp}`} target="_blank" rel="noopener noreferrer">
+                Contactar por WhatsApp
+              </a>
+            )}
+            {mineL && (
+              <>
+                <button className="b2" onClick={() => toggleSold(l)}>
+                  {l.sold ? "Marcar disponible" : "Marcar vendido"}
+                </button>
+                <button className="b2" onClick={() => deleteListing(l.id)}>
+                  Eliminar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  const marketView = !user ? (
+    <div className="cd">
+      <h2>Mercado</h2>
+      <p className="mu">Inicia sesión para ver y publicar artículos.</p>
+      <a className="b" href="/acceso">
+        Iniciar sesión
+      </a>
+    </div>
+  ) : (
+    <div>
+      <input
+        ref={mk1Ref}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          pickMk(0, e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={mk2Ref}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          pickMk(1, e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <div className="cd">
+        <h2>Mercado</h2>
+        <p className="mu">
+          Compra y vende entre personas. Selah no procesa pagos ni envíos: el trato lo acuerdan
+          directamente el vendedor y el comprador.
+        </p>
+        {myCountry ? (
+          <button className="b" onClick={() => setMkForm((v) => !v)}>
+            {mkForm ? "Cancelar" : "Vender un artículo"}
+          </button>
+        ) : (
+          <div className="mkc">
+            <p className="mu">
+              Elige tu país. Define la moneda de tus precios y no se puede cambiar después.
+            </p>
+            <select value={pickCountry} onChange={(e) => setPickCountry(e.target.value)}>
+              <option value="">Selecciona tu país</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name} ({c.cur})
+                </option>
+              ))}
+            </select>
+            <button className="b" onClick={saveCountry}>
+              Guardar país
+            </button>
+          </div>
+        )}
+      </div>
+      {myCountry && mkForm && (
+        <div className="cd mkf">
+          <input placeholder="Qué vendes" value={mkTitle} onChange={(e) => setMkTitle(e.target.value)} />
+          <textarea
+            rows={3}
+            placeholder="Descripción (opcional)"
+            value={mkDesc}
+            onChange={(e) => setMkDesc(e.target.value)}
+          />
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="any"
+            placeholder={"Precio en " + (COUNTRIES.find((c) => c.code === myCountry)?.cur ?? "")}
+            value={mkPrice}
+            onChange={(e) => setMkPrice(e.target.value)}
+          />
+          <input
+            inputMode="numeric"
+            placeholder="Tu WhatsApp con código de país, solo números"
+            value={mkWa}
+            onChange={(e) => setMkWa(e.target.value)}
+          />
+          <div className="mkph">
+            {[0, 1].map((i) => (
+              <div key={i} className="mkph1">
+                {mkPrev[i] ? (
+                  <>
+                    <img src={mkPrev[i] as string} alt="" />
+                    <button className="b2" onClick={() => dropMk(i)}>
+                      Quitar
+                    </button>
+                  </>
+                ) : (
+                  <button className="b2" onClick={() => mkRefs[i].current?.click()}>
+                    {i === 0 ? "Foto 1 (obligatoria)" : "Foto 2 (opcional)"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="row">
+            <button className="b" disabled={mkBusy} onClick={createListing}>
+              {mkBusy ? "Publicando..." : "Publicar"}
+            </button>
+          </div>
+        </div>
+      )}
+      {mkErr && (
+        <div className="cd">
+          <p className="mu">
+            <small>{mkErr}</small>
+          </p>
+        </div>
+      )}
+      <h3 className="pt">Disponibles</h3>
+      {mkAvail.length ? (
+        mkAvail.map(listCard)
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          Aún no hay artículos a la venta.
+        </p>
+      )}
+      {mkSold.length > 0 && (
+        <>
+          <h3 className="pt">Vendidos</h3>
+          {mkSold.map(listCard)}
+        </>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="ap">
@@ -1221,6 +1582,8 @@ export default function HomeView() {
             liveView
           ) : tab === "comms" ? (
             openComm !== null ? commDetail : commsView
+          ) : tab === "market" ? (
+            marketView
           ) : tab === "home" ? (
             posts.length ? (
               posts.map(card)
