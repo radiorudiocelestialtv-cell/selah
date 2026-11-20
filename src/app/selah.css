@@ -193,3 +193,11 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .ap .pp .mn{position:absolute;top:100%;right:0;margin-top:4px;background:var(--cd);border:1px solid var(--ln);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.25);min-width:130px;overflow:hidden;z-index:5}
 .ap .pp .mn button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);padding:10px 14px;font:inherit;cursor:pointer}
 .ap .pp .mn button:hover{background:var(--bg)}
+/* Barra inferior profesional */
+.bt{background:#14213a;border-top:0;box-shadow:0 -4px 18px rgba(0,0,0,.28)}
+.bt button{color:rgba(255,255,255,.72);width:54px;height:44px}
+.bt button svg{width:27px;height:27px}
+.bt button svg,.bt button svg *{stroke-width:2.4px}
+.bt button.on{background:rgba(255,255,255,.12);box-shadow:none;color:#F2B544}
+.bt button:active{transform:scale(.94)}
+.nb{top:-2px;right:2px;border:2px solid #14213a;min-width:18px;height:18px;line-height:14px}
