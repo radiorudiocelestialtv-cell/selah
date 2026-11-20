@@ -186,3 +186,5 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .ap .pp .ph .av{border:2px solid #fff}
 .ap .pp .ph .b2{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(0,0,0,.25)}
 .ap .pp .ph .mo{color:#fff}
+/* Vistas sin fondo */
+.ap .pp .ac span.vw{all:unset;display:flex;gap:6px;align-items:center;color:var(--mu);padding:6px 10px;font:inherit;box-sizing:border-box}
