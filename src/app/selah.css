@@ -203,3 +203,18 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .nb{top:-2px;right:2px;border:2px solid #14213a;min-width:18px;height:18px;line-height:14px}
 /* Barra inferior redondeada */
 .bt{border-radius:22px 22px 0 0}
+/* Colores de fondo y texto centrado */
+.ap .pz{align-items:center;text-align:center}
+.ap .pz p{max-width:100%;overflow-wrap:anywhere}
+.ap .pz small{left:0;right:0;text-align:center}
+.ap .pzc small{color:inherit;opacity:.65}
+.ap .pp[data-tone="light"] .ph{background:none}
+.ap .pp[data-tone="light"] .ph b{color:#111;text-shadow:none}
+.ap .pp[data-tone="light"] .ph small{color:rgba(0,0,0,.6);text-shadow:none}
+.ap .pp[data-tone="light"] .ph .av{border-color:rgba(0,0,0,.15)}
+.ap .pp[data-tone="light"] .ph .b2{color:#111;border-color:rgba(0,0,0,.35);background:rgba(255,255,255,.4)}
+.ap .pp[data-tone="light"] .ph .mo{color:#111}
+.bgp{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
+.bgs{width:28px;height:28px;border-radius:50%;border:2px solid var(--ln);padding:0;cursor:pointer}
+.bgs.on{outline:3px solid #F2B544;outline-offset:1px}
+.bgp input[type=color]{width:32px;height:32px;padding:0;border:0;background:none;cursor:pointer}

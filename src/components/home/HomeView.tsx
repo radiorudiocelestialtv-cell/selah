@@ -40,6 +40,7 @@ type PostRow = {
   image_url: string | null;
   created_at: string;
   edited_at: string | null;
+  bg_color: string | null;
   author: Prof | null;
 };
 type Cmt = {
@@ -141,6 +142,16 @@ function fmtPrice(n: number, country: string) {
   }
 }
 
+const BG_COLORS = ["#ffffff", "#000000", "#1F3A5F", "#F2B544", "#1b7f5c", "#b42318", "#6d28d9", "#0e7490"];
+
+function textOn(hex: string) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 >= 150 ? "#111111" : "#ffffff";
+}
+
 function ago(s: string) {
   const d = (Date.now() - new Date(s).getTime()) / 1000;
   if (d < 60) return "ahora";
@@ -207,6 +218,7 @@ export default function HomeView() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bgColor, setBgColor] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [dbg, setDbg] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -298,7 +310,7 @@ export default function HomeView() {
   async function loadPosts() {
     const { data, error } = await sb()
       .from("sl_posts")
-      .select("id,user_id,body,image_url,created_at,edited_at")
+      .select("id,user_id,body,image_url,created_at,edited_at,bg_color")
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) {
@@ -693,7 +705,7 @@ export default function HomeView() {
       const image_url = file ? await uploadImg(file, 900, "post") : null;
       const { error } = await sb()
         .from("sl_posts")
-        .insert({ user_id: user.id, body: t, image_url });
+        .insert({ user_id: user.id, body: t, image_url, bg_color: image_url ? null : bgColor });
       if (error) {
         flash("Error al publicar: " + error.message);
         return;
@@ -1201,7 +1213,7 @@ export default function HomeView() {
     const lk = likes[p.id] ?? { n: 0, mine: false };
     const isMine = p.user_id === user?.id;
     return (
-      <article className="pp" key={p.id} data-pid={p.id}>
+      <article className="pp" key={p.id} data-pid={p.id} data-tone={!p.image_url && p.bg_color && textOn(p.bg_color) !== "#ffffff" ? "light" : undefined}>
         <div className="ph">
           <button className="avb" onClick={() => openProfile(p.user_id)} aria-label="Ver perfil">
             <Avatar name={name} src={p.author?.avatar_url} />
@@ -1269,7 +1281,7 @@ export default function HomeView() {
             {p.body && <p className="cp">{p.body}</p>}
           </>
         ) : (
-          <div className="pz">
+          <div className={"pz" + (p.bg_color ? " pzc" : "")} style={p.bg_color ? { background: p.bg_color, color: textOn(p.bg_color) } : undefined}>
             <p>{p.body}</p>
             <small>Selah</small>
           </div>
@@ -2101,6 +2113,7 @@ export default function HomeView() {
           </div>
           <textarea
             ref={taRef}
+            style={!preview && bgColor ? { background: bgColor, color: textOn(bgColor), textAlign: "center" } : undefined}
             rows={4}
             placeholder={T.placeholder}
             value={text}
@@ -2109,6 +2122,33 @@ export default function HomeView() {
           {preview && (
             <div className="mw">
               <img src={preview} alt="" />
+            </div>
+          )}
+          {!preview && (
+            <div className="bgp">
+              <button
+                type="button"
+                className={"bgs" + (bgColor === null ? " on" : "")}
+                style={{ background: "linear-gradient(160deg,#1F3A5F,#2d5f7a)" }}
+                aria-label="Fondo azul de Selah"
+                onClick={() => setBgColor(null)}
+              />
+              {BG_COLORS.map((c) => (
+                <button
+                  type="button"
+                  key={c}
+                  className={"bgs" + (bgColor === c ? " on" : "")}
+                  style={{ background: c }}
+                  aria-label={"Fondo " + c}
+                  onClick={() => setBgColor(c)}
+                />
+              ))}
+              <input
+                type="color"
+                aria-label="Otro color"
+                value={bgColor ?? "#1F3A5F"}
+                onChange={(e) => setBgColor(e.target.value)}
+              />
             </div>
           )}
           <div className="row">
