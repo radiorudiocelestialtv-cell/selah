@@ -188,3 +188,8 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .ap .pp .ph .mo{color:#fff}
 /* Vistas sin fondo */
 .ap .pp .ac span.vw{all:unset;display:flex;gap:6px;align-items:center;color:var(--mu);padding:6px 10px;font:inherit;box-sizing:border-box}
+/* Menu de publicacion */
+.ap .pp .ph .mnw{position:relative}
+.ap .pp .mn{position:absolute;top:100%;right:0;margin-top:4px;background:var(--cd);border:1px solid var(--ln);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.25);min-width:130px;overflow:hidden;z-index:5}
+.ap .pp .mn button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);padding:10px 14px;font:inherit;cursor:pointer}
+.ap .pp .mn button:hover{background:var(--bg)}

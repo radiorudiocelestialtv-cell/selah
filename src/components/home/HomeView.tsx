@@ -191,6 +191,7 @@ export default function HomeView() {
   const vqRef = useRef<number[]>([]);
   const flushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
+  const [menuId, setMenuId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [editBusy, setEditBusy] = useState(false);
   const [stories, setStories] = useState<StoryRow[]>([]);
@@ -642,6 +643,13 @@ export default function HomeView() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, user?.id, tab, viewUid]);
+
+  useEffect(() => {
+    if (menuId === null) return;
+    const close = () => setMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuId]);
 
   function startEdit(p: PostRow) {
     setEditId(p.id);
@@ -1207,9 +1215,51 @@ export default function HomeView() {
               {following.includes(p.user_id) ? "Siguiendo" : "Seguir"}
             </button>
           )}
-          <button className="mo" aria-label="Reportar" onClick={() => flash(T.reporte)}>
-            <Icon name="dots" />
-          </button>
+          <div className="mnw">
+            <button
+              className="mo"
+              aria-label="Opciones"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuId((v) => (v === p.id ? null : p.id));
+              }}
+            >
+              <Icon name="dots" />
+            </button>
+            {menuId === p.id && (
+              <div className="mn">
+                {isMine ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        setMenuId(null);
+                        startEdit(p);
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMenuId(null);
+                        deletePost(p.id);
+                      }}
+                    >
+                      Eliminar
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMenuId(null);
+                      flash(T.reporte);
+                    }}
+                  >
+                    Reportar
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         {p.image_url ? (
           <>
@@ -1234,16 +1284,7 @@ export default function HomeView() {
           <span className="vw" title="Personas que vieron esta publicación">
             <Icon name="eye" /> {(viewCnt[p.id] ?? 0).toLocaleString("es")}
           </span>
-          {isMine && (
-            <>
-              <button onClick={() => startEdit(p)} aria-label="Editar publicación">
-                Editar
-              </button>
-              <button onClick={() => deletePost(p.id)} aria-label="Eliminar publicación">
-                Eliminar
-              </button>
-            </>
-          )}
+          
           <button className="shr" onClick={share} aria-label="Compartir">
             <Icon name="share" />
           </button>
