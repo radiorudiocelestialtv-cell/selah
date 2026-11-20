@@ -103,6 +103,7 @@ export default function HomeView() {
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [dbg, setDbg] = useState("");
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -128,15 +129,32 @@ export default function HomeView() {
     setTotal(count ?? 0);
   }
 
-  async function loadPosts() {
+  async function profMap(ids: string[]) {
+    const u = Array.from(new Set(ids));
+    const m: Record<string, Prof> = {};
+    if (!u.length) return m;
     const { data } = await sb()
+      .from("sl_profiles")
+      .select("id,name,bio,avatar_url,banner_url")
+      .in("id", u);
+    for (const p of (data ?? []) as Prof[]) m[p.id] = p;
+    return m;
+  }
+
+  async function loadPosts() {
+    const { data, error } = await sb()
       .from("sl_posts")
-      .select(
-        "id,user_id,body,image_url,created_at,author:sl_profiles(id,name,bio,avatar_url,banner_url)"
-      )
+      .select("id,user_id,body,image_url,created_at")
       .order("created_at", { ascending: false })
       .limit(100);
-    const rows = (data ?? []) as unknown as PostRow[];
+    if (error) {
+      setDbg("Error: " + error.message);
+      return flash("Error al cargar publicaciones: " + error.message);
+    }
+    setDbg("Recibidas del servidor: " + (data ?? []).length);
+    const raw = (data ?? []) as Omit<PostRow, "author">[];
+    const pm = await profMap(raw.map((r) => r.user_id));
+    const rows: PostRow[] = raw.map((r) => ({ ...r, author: pm[r.user_id] ?? null }));
     setPosts(rows);
     if (!rows.length) {
       setLikes({});
@@ -161,12 +179,22 @@ export default function HomeView() {
 
   async function loadStories() {
     const since = new Date(Date.now() - 864e5).toISOString();
-    const { data } = await sb()
+    const { data, error } = await sb()
       .from("sl_stories")
-      .select("id,user_id,image_url,created_at,author:sl_profiles(id,name,avatar_url)")
+      .select("id,user_id,image_url,created_at")
       .gte("created_at", since)
       .order("created_at", { ascending: true });
-    setStories((data ?? []) as unknown as StoryRow[]);
+    if (error) return flash("Error al cargar historias: " + error.message);
+    const raw = (data ?? []) as Omit<StoryRow, "author">[];
+    const pm = await profMap(raw.map((r) => r.user_id));
+    setStories(
+      raw.map((r) => ({
+        ...r,
+        author: pm[r.user_id]
+          ? { id: r.user_id, name: pm[r.user_id].name, avatar_url: pm[r.user_id].avatar_url }
+          : null,
+      }))
+    );
   }
 
   async function loadFollowing() {
@@ -182,10 +210,20 @@ export default function HomeView() {
   async function loadComments(id: number) {
     const { data } = await sb()
       .from("sl_comments")
-      .select("id,body,created_at,author:sl_profiles(name)")
+      .select("id,user_id,body,created_at")
       .eq("post_id", id)
       .order("created_at", { ascending: true });
-    setCmts((c) => ({ ...c, [id]: (data ?? []) as unknown as Cmt[] }));
+    const raw = (data ?? []) as { id: number; user_id: string; body: string; created_at: string }[];
+    const pm = await profMap(raw.map((r) => r.user_id));
+    setCmts((c) => ({
+      ...c,
+      [id]: raw.map((r) => ({
+        id: r.id,
+        body: r.body,
+        created_at: r.created_at,
+        author: pm[r.user_id] ? { name: pm[r.user_id].name } : null,
+      })),
+    }));
   }
 
   async function loadProfile(uid: string) {
@@ -287,7 +325,10 @@ export default function HomeView() {
       const { error } = await sb()
         .from("sl_posts")
         .insert({ user_id: user.id, body: t, image_url });
-      if (error) throw error;
+      if (error) {
+        flash("Error al publicar: " + error.message);
+        return;
+      }
       setText("");
       setFile(null);
       setPreview(null);
@@ -377,6 +418,11 @@ export default function HomeView() {
     setDrafts((d) => ({ ...d, [id]: "" }));
     await sb().from("sl_comments").insert({ post_id: id, user_id: user.id, body: t });
     loadComments(id);
+  }
+
+  async function logout() {
+    await sb().auth.signOut();
+    window.location.href = "/acceso";
   }
 
   function share() {
@@ -558,6 +604,13 @@ export default function HomeView() {
             <span>Siguiendo</span>
           </button>
         </div>
+        {own && (
+          <div className="pfa">
+            <button className="b2" onClick={logout}>
+              Cerrar sesión
+            </button>
+          </div>
+        )}
         {!own && (
           <div className="pfa">
             <button className="b" onClick={() => toggleFollow(prof.id)}>
@@ -615,11 +668,11 @@ export default function HomeView() {
                 <button key={g[0].user_id} onClick={() => setViewer({ list: g, i: 0 })}>
                   <div className="rg">
                     <div>
-                      {a?.avatar_url ? (
-                        <img src={a.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : (
-                        (a?.name ?? "U").charAt(0).toUpperCase()
-                      )}
+                      <img
+                        src={g[g.length - 1].image_url}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
                     </div>
                   </div>
                   <span>{mineG ? "Mi historia" : a?.name}</span>
@@ -639,6 +692,7 @@ export default function HomeView() {
               <div className="cd">
                 <h2>Sé el primero en publicar</h2>
                 <p className="mu">Toca el botón + para compartir algo con la comunidad.</p>
+                {dbg && <p className="mu"><small>{dbg}</small></p>}
               </div>
             )
           ) : (
