@@ -119,3 +119,7 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .lvh{display:flex;align-items:center;gap:8px}
 .lvb{background:#b42318;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700}
 .lf input,.lf textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}
+/* Comunidades */
+.cmc{background:var(--cd);border-bottom:1px solid var(--ln);padding:12px 14px}
+.cmh{display:flex;align-items:center;gap:8px}
+.cmf input,.cmf textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}

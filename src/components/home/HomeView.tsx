@@ -56,6 +56,14 @@ type LiveRow = {
   author: { name: string } | null;
 };
 
+type CommRow = {
+  id: number;
+  name: string;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+};
+
 function ago(s: string) {
   const d = (Date.now() - new Date(s).getTime()) / 1000;
   if (d < 60) return "ahora";
@@ -114,6 +122,14 @@ export default function HomeView() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [dbg, setDbg] = useState("");
+  const [comms, setComms] = useState<CommRow[]>([]);
+  const [commCounts, setCommCounts] = useState<Record<number, number>>({});
+  const [myComms, setMyComms] = useState<number[]>([]);
+  const [commErr, setCommErr] = useState("");
+  const [commForm, setCommForm] = useState(false);
+  const [cmName, setCmName] = useState("");
+  const [cmDesc, setCmDesc] = useState("");
+  const [cmBusy, setCmBusy] = useState(false);
   const [lives, setLives] = useState<LiveRow[]>([]);
   const [liveErr, setLiveErr] = useState("");
   const [liveForm, setLiveForm] = useState(false);
@@ -236,6 +252,41 @@ export default function HomeView() {
     );
   }
 
+  async function loadComms() {
+    const { data, error } = await sb()
+      .from("sl_communities")
+      .select("id,name,description,created_by,created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      setCommErr("Error: " + error.message);
+      return;
+    }
+    setCommErr("");
+    const rows = (data ?? []) as CommRow[];
+    setComms(rows);
+    if (!rows.length) {
+      setCommCounts({});
+      setMyComms([]);
+      return;
+    }
+    const { data: mm } = await sb()
+      .from("sl_community_members")
+      .select("community_id,user_id")
+      .in(
+        "community_id",
+        rows.map((r) => r.id)
+      );
+    const cnt: Record<number, number> = {};
+    const mine: number[] = [];
+    for (const m of (mm ?? []) as { community_id: number; user_id: string }[]) {
+      cnt[m.community_id] = (cnt[m.community_id] ?? 0) + 1;
+      if (m.user_id === uidRef.current) mine.push(m.community_id);
+    }
+    setCommCounts(cnt);
+    setMyComms(mine);
+  }
+
   async function loadFollowing() {
     const uid = uidRef.current;
     if (!uid) return setFollowing([]);
@@ -283,6 +334,7 @@ export default function HomeView() {
     total: loadTotal,
     posts: loadPosts,
     stories: loadStories,
+    comms: loadComms,
     lives: loadLives,
     following: loadFollowing,
     comments: () => {
@@ -300,6 +352,7 @@ export default function HomeView() {
     fresh.current.posts();
     fresh.current.stories();
     fresh.current.lives();
+    fresh.current.comms();
     const ch = c.channel("selah-live");
     const on = (t: string, fn: () => void) =>
       ch.on("postgres_changes", { event: "*", schema: "public", table: t }, fn);
@@ -310,6 +363,8 @@ export default function HomeView() {
     on("sl_posts", () => fresh.current.posts());
     on("sl_likes", () => fresh.current.posts());
     on("sl_stories", () => fresh.current.stories());
+    on("sl_communities", () => fresh.current.comms());
+    on("sl_community_members", () => fresh.current.comms());
     on("sl_lives", () => fresh.current.lives());
     on("sl_follows", () => {
       fresh.current.following();
@@ -332,6 +387,7 @@ export default function HomeView() {
       .then(({ data }) => setMe((data as Prof | null) ?? null));
     fresh.current.following();
     fresh.current.posts();
+    fresh.current.comms();
   }, [user]);
 
   useEffect(() => {
@@ -491,6 +547,50 @@ export default function HomeView() {
     const { error } = await sb().from("sl_lives").delete().eq("id", id);
     if (error) return flash("Error: " + error.message);
     await loadLives();
+  }
+
+  async function createComm() {
+    if (!user) return flash("Inicia sesión para crear una comunidad.");
+    const n = cmName.trim();
+    if (!n) return flash("Escribe un nombre.");
+    setCmBusy(true);
+    const { data, error } = await sb()
+      .from("sl_communities")
+      .insert({ name: n, description: cmDesc.trim() || null, created_by: user.id })
+      .select("id")
+      .single();
+    if (error || !data) {
+      setCmBusy(false);
+      return flash(
+        error?.code === "23505"
+          ? "Ya existe una comunidad con ese nombre."
+          : "Error al crear: " + (error?.message ?? "")
+      );
+    }
+    await sb().from("sl_community_members").insert({ community_id: data.id, user_id: user.id });
+    setCmBusy(false);
+    setCmName("");
+    setCmDesc("");
+    setCommForm(false);
+    await loadComms();
+    flash("Comunidad creada.");
+  }
+
+  async function toggleComm(id: number) {
+    if (!user) return flash("Inicia sesión para unirte.");
+    if (myComms.includes(id)) {
+      await sb().from("sl_community_members").delete().eq("community_id", id).eq("user_id", user.id);
+    } else {
+      await sb().from("sl_community_members").insert({ community_id: id, user_id: user.id });
+    }
+    await loadComms();
+  }
+
+  async function deleteComm(id: number) {
+    if (!window.confirm("¿Eliminar esta comunidad?")) return;
+    const { error } = await sb().from("sl_communities").delete().eq("id", id);
+    if (error) return flash("Error: " + error.message);
+    await loadComms();
   }
 
   async function logout() {
@@ -797,6 +897,92 @@ export default function HomeView() {
     </div>
   );
 
+  const commsMine = comms.filter((c) => myComms.includes(c.id));
+  const commsOther = comms.filter((c) => !myComms.includes(c.id));
+
+  const commCard = (c: CommRow) => {
+    const joined = myComms.includes(c.id);
+    const mineC = c.created_by === user?.id;
+    const n = commCounts[c.id] ?? 0;
+    return (
+      <article className="cmc" key={c.id}>
+        <div className="cmh">
+          <b>{c.name}</b>
+        </div>
+        <small className="mu">
+          {n} {n === 1 ? "miembro" : "miembros"}
+        </small>
+        {c.description && <p className="cp">{c.description}</p>}
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className={joined ? "b2" : "b"} onClick={() => toggleComm(c.id)}>
+            {joined ? "Salir" : "Unirme"}
+          </button>
+          {mineC && (
+            <button className="b2" onClick={() => deleteComm(c.id)}>
+              Eliminar
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  const commsView = (
+    <div>
+      <div className="cd">
+        <h2>Comunidades</h2>
+        <p className="mu">Encuentra tu grupo o crea uno nuevo para reunir a otros.</p>
+        <button
+          className="b"
+          onClick={() =>
+            user ? setCommForm((v) => !v) : flash("Inicia sesión para crear una comunidad.")
+          }
+        >
+          {commForm ? "Cancelar" : "Crear comunidad"}
+        </button>
+      </div>
+      {commForm && (
+        <div className="cd cmf">
+          <input placeholder="Nombre" value={cmName} onChange={(e) => setCmName(e.target.value)} />
+          <textarea
+            rows={3}
+            placeholder="Descripción (opcional)"
+            value={cmDesc}
+            onChange={(e) => setCmDesc(e.target.value)}
+          />
+          <div className="row">
+            <button className="b" disabled={cmBusy} onClick={createComm}>
+              {cmBusy ? "Guardando..." : "Crear"}
+            </button>
+          </div>
+        </div>
+      )}
+      {commErr && (
+        <div className="cd">
+          <p className="mu">
+            <small>{commErr}</small>
+          </p>
+        </div>
+      )}
+      <h3 className="pt">Mis comunidades</h3>
+      {commsMine.length ? (
+        commsMine.map(commCard)
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          Aún no te has unido a ninguna.
+        </p>
+      )}
+      <h3 className="pt">Descubrir</h3>
+      {commsOther.length ? (
+        commsOther.map(commCard)
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          No hay más comunidades por ahora.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="ap">
@@ -854,6 +1040,8 @@ export default function HomeView() {
             profileView
           ) : tab === "live" ? (
             liveView
+          ) : tab === "comms" ? (
+            commsView
           ) : tab === "home" ? (
             posts.length ? (
               posts.map(card)
