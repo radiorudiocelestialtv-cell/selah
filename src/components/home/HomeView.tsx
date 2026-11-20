@@ -46,6 +46,16 @@ type StoryRow = {
   author: Mini | null;
 };
 
+type LiveRow = {
+  id: number;
+  user_id: string;
+  title: string;
+  description: string | null;
+  starts_at: string;
+  status: "scheduled" | "live" | "ended";
+  author: { name: string } | null;
+};
+
 function ago(s: string) {
   const d = (Date.now() - new Date(s).getTime()) / 1000;
   if (d < 60) return "ahora";
@@ -104,6 +114,13 @@ export default function HomeView() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [dbg, setDbg] = useState("");
+  const [lives, setLives] = useState<LiveRow[]>([]);
+  const [liveErr, setLiveErr] = useState("");
+  const [liveForm, setLiveForm] = useState(false);
+  const [lvTitle, setLvTitle] = useState("");
+  const [lvDesc, setLvDesc] = useState("");
+  const [lvWhen, setLvWhen] = useState("");
+  const [lvBusy, setLvBusy] = useState(false);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -197,6 +214,28 @@ export default function HomeView() {
     );
   }
 
+  async function loadLives() {
+    const { data, error } = await sb()
+      .from("sl_lives")
+      .select("id,user_id,title,description,starts_at,status")
+      .neq("status", "ended")
+      .order("starts_at", { ascending: true })
+      .limit(100);
+    if (error) {
+      setLiveErr("Error: " + error.message);
+      return;
+    }
+    setLiveErr("");
+    const raw = (data ?? []) as Omit<LiveRow, "author">[];
+    const pm = await profMap(raw.map((r) => r.user_id));
+    setLives(
+      raw.map((r) => ({
+        ...r,
+        author: pm[r.user_id] ? { name: pm[r.user_id].name } : null,
+      }))
+    );
+  }
+
   async function loadFollowing() {
     const uid = uidRef.current;
     if (!uid) return setFollowing([]);
@@ -244,6 +283,7 @@ export default function HomeView() {
     total: loadTotal,
     posts: loadPosts,
     stories: loadStories,
+    lives: loadLives,
     following: loadFollowing,
     comments: () => {
       if (open !== null) loadComments(open);
@@ -259,6 +299,7 @@ export default function HomeView() {
     fresh.current.total();
     fresh.current.posts();
     fresh.current.stories();
+    fresh.current.lives();
     const ch = c.channel("selah-live");
     const on = (t: string, fn: () => void) =>
       ch.on("postgres_changes", { event: "*", schema: "public", table: t }, fn);
@@ -269,6 +310,7 @@ export default function HomeView() {
     on("sl_posts", () => fresh.current.posts());
     on("sl_likes", () => fresh.current.posts());
     on("sl_stories", () => fresh.current.stories());
+    on("sl_lives", () => fresh.current.lives());
     on("sl_follows", () => {
       fresh.current.following();
       fresh.current.profile();
@@ -418,6 +460,37 @@ export default function HomeView() {
     setDrafts((d) => ({ ...d, [id]: "" }));
     await sb().from("sl_comments").insert({ post_id: id, user_id: user.id, body: t });
     loadComments(id);
+  }
+
+  async function createLive() {
+    if (!user) return flash("Inicia sesión para programar una transmisión.");
+    const t = lvTitle.trim();
+    if (!t) return flash("Escribe un título.");
+    setLvBusy(true);
+    const when = lvWhen ? new Date(lvWhen).toISOString() : new Date().toISOString();
+    const { error } = await sb()
+      .from("sl_lives")
+      .insert({ user_id: user.id, title: t, description: lvDesc.trim() || null, starts_at: when });
+    setLvBusy(false);
+    if (error) return flash("Error al programar: " + error.message);
+    setLvTitle("");
+    setLvDesc("");
+    setLvWhen("");
+    setLiveForm(false);
+    await loadLives();
+    flash("Transmisión programada.");
+  }
+
+  async function setLiveStatus(id: number, status: "live" | "ended") {
+    const { error } = await sb().from("sl_lives").update({ status }).eq("id", id);
+    if (error) return flash("Error: " + error.message);
+    await loadLives();
+  }
+
+  async function deleteLive(id: number) {
+    const { error } = await sb().from("sl_lives").delete().eq("id", id);
+    if (error) return flash("Error: " + error.message);
+    await loadLives();
   }
 
   async function logout() {
@@ -630,6 +703,100 @@ export default function HomeView() {
     </div>
   );
 
+  const liveNow = lives.filter((l) => l.status === "live");
+  const liveNext = lives.filter((l) => l.status === "scheduled");
+
+  const liveCard = (l: LiveRow) => {
+    const mineL = l.user_id === user?.id;
+    return (
+      <article className="lv" key={l.id}>
+        <div className="lvh">
+          <b>{l.title}</b>
+          {l.status === "live" && <span className="lvb">En vivo</span>}
+        </div>
+        <small className="mu">
+          {l.author?.name ?? "Usuario"} - {new Date(l.starts_at).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" })}
+        </small>
+        {l.description && <p className="cp">{l.description}</p>}
+        {mineL && (
+          <div className="row" style={{ marginTop: 8 }}>
+            {l.status === "scheduled" ? (
+              <button className="b" onClick={() => setLiveStatus(l.id, "live")}>
+                Iniciar
+              </button>
+            ) : (
+              <button className="b" onClick={() => setLiveStatus(l.id, "ended")}>
+                Terminar
+              </button>
+            )}
+            <button className="b2" onClick={() => deleteLive(l.id)}>
+              Eliminar
+            </button>
+          </div>
+        )}
+      </article>
+    );
+  };
+
+  const liveView = (
+    <div>
+      <div className="cd">
+        <h2>En vivo</h2>
+        <p className="mu">
+          Programa y descubre transmisiones de la comunidad. El video se conecta en el siguiente paso.
+        </p>
+        <button
+          className="b"
+          onClick={() =>
+            user ? setLiveForm((v) => !v) : flash("Inicia sesión para programar una transmisión.")
+          }
+        >
+          {liveForm ? "Cancelar" : "Programar transmisión"}
+        </button>
+      </div>
+      {liveForm && (
+        <div className="cd lf">
+          <input placeholder="Título" value={lvTitle} onChange={(e) => setLvTitle(e.target.value)} />
+          <textarea
+            rows={3}
+            placeholder="Descripción (opcional)"
+            value={lvDesc}
+            onChange={(e) => setLvDesc(e.target.value)}
+          />
+          <input type="datetime-local" value={lvWhen} onChange={(e) => setLvWhen(e.target.value)} />
+          <div className="row">
+            <button className="b" disabled={lvBusy} onClick={createLive}>
+              {lvBusy ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </div>
+      )}
+      {liveErr && (
+        <div className="cd">
+          <p className="mu">
+            <small>{liveErr}</small>
+          </p>
+        </div>
+      )}
+      <h3 className="pt">En vivo ahora</h3>
+      {liveNow.length ? (
+        liveNow.map(liveCard)
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          No hay transmisiones en vivo ahora.
+        </p>
+      )}
+      <h3 className="pt">Próximas</h3>
+      {liveNext.length ? (
+        liveNext.map(liveCard)
+      ) : (
+        <p className="mu" style={{ padding: "0 14px" }}>
+          No hay transmisiones programadas.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div className="ap">
@@ -685,6 +852,8 @@ export default function HomeView() {
         <main>
           {tab === "profile" ? (
             profileView
+          ) : tab === "live" ? (
+            liveView
           ) : tab === "home" ? (
             posts.length ? (
               posts.map(card)

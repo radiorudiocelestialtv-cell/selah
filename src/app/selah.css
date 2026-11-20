@@ -114,3 +114,8 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .fl{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:480px;max-height:70vh;overflow:auto;background:var(--cd);border-radius:18px 18px 0 0;z-index:26;padding:14px}
 .fl .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .fl .it{display:flex;gap:10px;align-items:center;width:100%;background:none;border:0;color:var(--ink);padding:8px 0;font:inherit;cursor:pointer;text-align:left}
+/* En vivo */
+.lv{background:var(--cd);border-bottom:1px solid var(--ln);padding:12px 14px}
+.lvh{display:flex;align-items:center;gap:8px}
+.lvb{background:#b42318;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700}
+.lf input,.lf textarea{display:block;width:100%;margin-bottom:8px;box-sizing:border-box}
