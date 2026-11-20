@@ -201,3 +201,5 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .bt button.on{background:rgba(255,255,255,.12);box-shadow:none;color:#F2B544}
 .bt button:active{transform:scale(.94)}
 .nb{top:-2px;right:2px;border:2px solid #14213a;min-width:18px;height:18px;line-height:14px}
+/* Barra inferior redondeada */
+.bt{border-radius:22px 22px 0 0}
