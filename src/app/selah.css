@@ -176,3 +176,5 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .tb .lg{font-size:19px;gap:6px}
 .dot{top:3px;right:3px}
 .st{border-bottom:0;padding:4px 12px 10px;gap:10px}
+/* Vistas */
+.ac .vw{display:flex;gap:6px;align-items:center;color:var(--mu);padding:6px 10px}

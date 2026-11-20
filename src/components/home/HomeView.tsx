@@ -184,6 +184,12 @@ export default function HomeView() {
   const [cmts, setCmts] = useState<Record<number, Cmt[]>>({});
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [open, setOpen] = useState<number | null>(null);
+  const [viewCnt, setViewCnt] = useState<Record<number, number>>({});
+  const postsRef = useRef<PostRow[]>([]);
+  postsRef.current = posts;
+  const seenRef = useRef<Set<number>>(new Set());
+  const vqRef = useRef<number[]>([]);
+  const flushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [editBusy, setEditBusy] = useState(false);
@@ -559,6 +565,83 @@ export default function HomeView() {
     if (error) throw error;
     return sb().storage.from("selah-media").getPublicUrl(path).data.publicUrl;
   }
+
+  async function loadViews() {
+    const ids = postsRef.current.map((p) => p.id);
+    if (!ids.length) {
+      setViewCnt({});
+      return;
+    }
+    const { data, error } = await sb().rpc("sl_post_view_counts", { ids });
+    if (error) return;
+    const m: Record<number, number> = {};
+    for (const r of (data ?? []) as { post_id: number; n: number }[]) m[r.post_id] = Number(r.n);
+    setViewCnt(m);
+  }
+
+  async function flushViews() {
+    const uid = uidRef.current;
+    const ids = vqRef.current.splice(0);
+    if (!uid || !ids.length) return;
+    const { error } = await sb()
+      .from("sl_post_views")
+      .upsert(
+        ids.map((id) => ({ post_id: id, user_id: uid })),
+        { onConflict: "post_id,user_id", ignoreDuplicates: true }
+      );
+    if (!error) await loadViews();
+  }
+
+  useEffect(() => {
+    loadViews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts]);
+
+  useEffect(() => {
+    if (!user) return;
+    const els = document.querySelectorAll<HTMLElement>("article[data-pid]");
+    if (!els.length) return;
+    const timers = new Map<number, ReturnType<typeof setTimeout>>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const id = Number((e.target as HTMLElement).dataset.pid);
+          if (e.isIntersecting) {
+            if (seenRef.current.has(id) || timers.has(id)) continue;
+            timers.set(
+              id,
+              setTimeout(() => {
+                timers.delete(id);
+                seenRef.current.add(id);
+                vqRef.current.push(id);
+                if (flushRef.current) clearTimeout(flushRef.current);
+                flushRef.current = setTimeout(() => {
+                  flushViews();
+                }, 1500);
+              }, 1000)
+            );
+          } else {
+            const t = timers.get(id);
+            if (t) {
+              clearTimeout(t);
+              timers.delete(id);
+            }
+          }
+        }
+      },
+      { threshold: 0.6 }
+    );
+    els.forEach((el) => {
+      const id = Number(el.dataset.pid);
+      const p = postsRef.current.find((x) => x.id === id);
+      if (p && p.user_id !== user.id) io.observe(el);
+    });
+    return () => {
+      io.disconnect();
+      timers.forEach((t) => clearTimeout(t));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts, user?.id, tab, viewUid]);
 
   function startEdit(p: PostRow) {
     setEditId(p.id);
@@ -1110,7 +1193,7 @@ export default function HomeView() {
     const lk = likes[p.id] ?? { n: 0, mine: false };
     const isMine = p.user_id === user?.id;
     return (
-      <article className="pp" key={p.id}>
+      <article className="pp" key={p.id} data-pid={p.id}>
         <div className="ph">
           <button className="avb" onClick={() => openProfile(p.user_id)} aria-label="Ver perfil">
             <Avatar name={name} src={p.author?.avatar_url} />
@@ -1148,6 +1231,9 @@ export default function HomeView() {
           <button onClick={() => toggleComments(p.id)}>
             <Icon name="chat" /> {cmts[p.id]?.length ?? ""}
           </button>
+          <span className="vw" title="Personas que vieron esta publicación">
+            <Icon name="eye" /> {(viewCnt[p.id] ?? 0).toLocaleString("es")}
+          </span>
           {isMine && (
             <>
               <button onClick={() => startEdit(p)} aria-label="Editar publicación">
