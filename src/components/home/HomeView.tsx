@@ -11,7 +11,7 @@ import { getSb } from "../../lib/sb";
 const BN: { k: string; icon: IconName; label: string }[] = [
   { k: "home", icon: "home", label: "Inicio" },
   { k: "comms", icon: "users", label: "Comunidades" },
-  { k: "live", icon: "live", label: "En vivo" },
+  { k: "search", icon: "search", label: "Buscar" },
   { k: "market", icon: "store", label: "Mercado" },
   { k: "chat", icon: "chat", label: "Mensajes" },
   { k: "profile", icon: "user", label: "Perfil" },
@@ -209,6 +209,33 @@ export default function HomeView() {
   const [viewer, setViewer] = useState<{ list: StoryRow[]; i: number } | null>(null);
   const [following, setFollowing] = useState<string[]>([]);
   const [tab, setTab] = useState("home");
+  const [sq, setSq] = useState("");
+  const [sres, setSres] = useState<{ id: string; name: string; bio: string | null; avatar_url: string | null }[]>([]);
+  useEffect(() => {
+    if (tab !== "search") return;
+    const term = sq.trim();
+    if (term.length < 2) {
+      setSres([]);
+      return;
+    }
+    let cancelled = false;
+    const h = setTimeout(async () => {
+      const safe = term.replace(/[%,()]/g, " ");
+      const { data } = await sb()
+        .from("sl_profiles")
+        .select("id,name,bio,avatar_url")
+        .ilike("name", "%" + safe + "%")
+        .limit(30);
+      if (cancelled) return;
+      const rows = (data ?? []) as { id: string; name: string; bio: string | null; avatar_url: string | null }[];
+      setSres(rows.filter((r) => r.id !== user?.id));
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(h);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sq, tab]);
   const [viewUid, setViewUid] = useState<string | null>(null);
   const [prof, setProf] = useState<Prof | null>(null);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
@@ -2084,6 +2111,42 @@ export default function HomeView() {
             openComm !== null ? commDetail : commsView
           ) : tab === "market" ? (
             marketView
+          ) : tab === "search" ? (
+            <div className="sch">
+              <input
+                className="schi"
+                type="search"
+                placeholder="Buscar personas por nombre"
+                aria-label="Buscar personas"
+                value={sq}
+                autoFocus
+                onChange={(e) => setSq(e.target.value)}
+              />
+              {sq.trim().length < 2 ? (
+                <p className="schm">Escribe al menos 2 letras.</p>
+              ) : sres.length === 0 ? (
+                <p className="schm">No encontre a nadie con ese nombre.</p>
+              ) : (
+                sres.map((u) => (
+                  <div className="schr" key={u.id}>
+                    <button type="button" className="schu" onClick={() => openProfile(u.id)}>
+                      {u.avatar_url ? (
+                        <img className="scha" src={u.avatar_url} alt="" />
+                      ) : (
+                        <span className="scha schf">{(u.name || "?").slice(0, 1).toUpperCase()}</span>
+                      )}
+                      <span className="schn">
+                        <b>{u.name}</b>
+                        {u.bio ? <small>{u.bio}</small> : null}
+                      </span>
+                    </button>
+                    <button type="button" className="b2 sg" onClick={() => toggleFollow(u.id)}>
+                      {following.includes(u.id) ? "Siguiendo" : "Seguir"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           ) : tab === "chat" ? (
             chatView
           ) : tab === "home" ? (

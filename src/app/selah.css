@@ -218,3 +218,13 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .bgs{width:28px;height:28px;border-radius:50%;border:2px solid var(--ln);padding:0;cursor:pointer}
 .bgs.on{outline:3px solid #F2B544;outline-offset:1px}
 .bgp input[type=color]{width:32px;height:32px;padding:0;border:0;background:none;cursor:pointer}
+/* Buscar personas */
+.sch{padding:12px 4px}
+.schi{width:100%;box-sizing:border-box;padding:12px 16px;border-radius:999px;border:1px solid var(--ln);background:transparent;color:inherit;font:inherit;outline:none}
+.schm{opacity:.65;text-align:center;margin:20px 0}
+.schr{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--ln)}
+.schu{display:flex;align-items:center;gap:12px;flex:1;min-width:0;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.scha{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none}
+.schf{display:flex;align-items:center;justify-content:center;background:#1F3A5F;color:#fff;font-weight:700}
+.schn{display:flex;flex-direction:column;min-width:0}
+.schn small{opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
