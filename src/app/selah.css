@@ -178,3 +178,11 @@ input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--ln);bo
 .st{border-bottom:0;padding:4px 12px 10px;gap:10px}
 /* Vistas */
 .ac .vw{display:flex;gap:6px;align-items:center;color:var(--mu);padding:6px 10px}
+/* Encabezado de publicacion sobre la foto */
+.ap .pp{position:relative}
+.ap .pp .ph{position:absolute;top:0;left:0;right:0;z-index:2;padding:12px 14px 30px;margin:0;background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0))}
+.ap .pp .ph b{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.ap .pp .ph small{color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.ap .pp .ph .av{border:2px solid #fff}
+.ap .pp .ph .b2{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(0,0,0,.25)}
+.ap .pp .ph .mo{color:#fff}
